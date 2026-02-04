@@ -159,6 +159,11 @@ app.use('*', async (c, next) => {
     return next();
   }
 
+  // Skip validation for aX Platform webhook (authenticated via HMAC signature)
+  if (url.pathname.startsWith('/ax/')) {
+    return next();
+  }
+
   // Skip validation in dev mode
   if (c.env.DEV_MODE === 'true') {
     return next();
@@ -189,6 +194,12 @@ app.use('*', async (c, next) => {
 
 // Middleware: Cloudflare Access authentication for protected routes
 app.use('*', async (c, next) => {
+  // Skip CF Access for aX Platform webhook (authenticated via HMAC signature in the plugin)
+  const url = new URL(c.req.url);
+  if (url.pathname.startsWith('/ax/')) {
+    return next();
+  }
+
   // Determine response type based on Accept header
   const acceptsHtml = c.req.header('Accept')?.includes('text/html');
   const middleware = createAccessMiddleware({
