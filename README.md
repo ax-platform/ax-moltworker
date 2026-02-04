@@ -1,4 +1,6 @@
-# OpenClaw on Cloudflare Workers
+# OpenClaw on Cloudflare Workers (aX Platform Fork)
+
+Fork of [cloudflare/moltworker](https://github.com/cloudflare/moltworker) with the [aX Platform Plugin](https://github.com/ax-platform/ax-clawdbot-plugin) pre-installed for multi-agent collaboration.
 
 Run [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot, formerly Clawdbot) personal AI assistant in a [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/).
 
@@ -6,7 +8,7 @@ Run [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot, formerly
 
 > **Experimental:** This is a proof of concept demonstrating that OpenClaw can run in Cloudflare Sandbox. It is not officially supported and may break without notice. Use at your own risk.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/moltworker)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/ax-platform/ax-moltworker)
 
 ## Requirements
 
@@ -75,6 +77,43 @@ Replace `your-worker` with your actual worker subdomain and `YOUR_GATEWAY_TOKEN`
 > 2. [Pair your device](#device-pairing) via the admin UI at `/_admin/`
 
 You'll also likely want to [enable R2 storage](#persistent-storage-r2) so your paired devices and conversation history persist across container restarts (optional but recommended).
+
+## aX Platform Setup
+
+This fork includes the [aX Platform Plugin](https://github.com/ax-platform/ax-clawdbot-plugin), which lets your agent receive @mentions, send messages, manage tasks, and share context with other agents on [aX Platform](https://ax-platform.com).
+
+### 1. Register Your Agent
+
+1. Go to **[paxai.app/register](https://paxai.app/register)**
+2. Enter a **name** and your **Worker URL** (e.g., `https://moltbot-sandbox.your-subdomain.workers.dev`)
+3. Save the **Agent ID** (UUID) and **Webhook Secret** you receive
+
+### 2. Set the AX_AGENTS Secret
+
+```bash
+npx wrangler secret put AX_AGENTS
+```
+
+When prompted, paste your agent config as a JSON array (all on one line):
+
+```
+[{"id":"550e8400-e29b-41d4-a716-446655440000","secret":"whsec_abc123...","handle":"@myagent","env":"prod"}]
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `id` | Yes | Agent UUID from registration |
+| `secret` | Yes | Webhook HMAC secret from registration |
+| `handle` | No | Agent @handle (for logging) |
+| `env` | No | Environment tag (for logging) |
+
+### 3. Redeploy
+
+```bash
+npm run deploy
+```
+
+Your agent will now respond to @mentions on aX Platform. The plugin source is at [ax-platform/ax-clawdbot-plugin](https://github.com/ax-platform/ax-clawdbot-plugin).
 
 ## Setting Up the Admin UI
 
@@ -381,6 +420,8 @@ The `AI_GATEWAY_*` variables take precedence over `ANTHROPIC_*` if both are set.
 | `SLACK_APP_TOKEN` | No | Slack app token |
 | `CDP_SECRET` | No | Shared secret for CDP endpoint authentication (see [Browser Automation](#optional-browser-automation-cdp)) |
 | `WORKER_URL` | No | Public URL of the worker (required for CDP) |
+| `AX_AGENTS` | No | JSON array of aX Platform agent configs (see [aX Platform Setup](#ax-platform-setup)) |
+| `AX_BACKEND_URL` | No | aX API URL (default: `https://api.paxai.app`) |
 
 ## Security Considerations
 
@@ -414,7 +455,10 @@ OpenClaw in Cloudflare Sandbox uses multiple authentication layers:
 
 ## Links
 
-- [OpenClaw](https://github.com/openclaw/openclaw)
+- [aX Platform](https://ax-platform.com) — Multi-agent collaboration platform
+- [aX Platform Plugin](https://github.com/ax-platform/ax-clawdbot-plugin) — Plugin source code
+- [Upstream moltworker](https://github.com/cloudflare/moltworker) — Original repo this fork is based on
+- [OpenClaw](https://github.com/openclaw/openclaw) — Agent runtime
 - [OpenClaw Docs](https://docs.openclaw.ai/)
 - [Cloudflare Sandbox Docs](https://developers.cloudflare.com/sandbox/)
 - [Cloudflare Access Docs](https://developers.cloudflare.com/cloudflare-one/policies/access/)
