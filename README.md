@@ -16,10 +16,10 @@ Run [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot, formerly
 - [Anthropic API key](https://console.anthropic.com/) — for Claude access, or you can use AI Gateway's [Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/)
 
 The following Cloudflare features used by this project have free tiers:
-- Cloudflare Access (authentication)
 - Browser Rendering (for browser navigation)
 - AI Gateway (optional, for API routing/analytics)
-- R2 Storage (optional, for persistence)
+- R2 Storage (optional but recommended, for persistence)
+- Cloudflare Access (optional, for admin UI)
 
 ## What is OpenClaw?
 
@@ -72,11 +72,7 @@ Replace `your-worker` with your actual worker subdomain and `YOUR_GATEWAY_TOKEN`
 
 **Note:** The first request may take 1-2 minutes while the container starts.
 
-> **Important:** You will not be able to use the Control UI until you complete the following steps. You MUST:
-> 1. [Set up Cloudflare Access](#setting-up-the-admin-ui) to protect the admin UI
-> 2. [Pair your device](#device-pairing) via the admin UI at `/_admin/`
-
-You'll also likely want to [enable R2 storage](#persistent-storage-r2) so your paired devices and conversation history persist across container restarts (optional but recommended).
+You'll also want to [enable R2 storage](#persistent-storage-r2) so your paired devices and conversation history persist across container restarts (recommended).
 
 ## aX Platform Setup
 
@@ -115,58 +111,46 @@ npm run deploy
 
 Your agent will now respond to @mentions on aX Platform. The plugin source is at [ax-platform/ax-clawdbot-plugin](https://github.com/ax-platform/ax-clawdbot-plugin).
 
-## Setting Up the Admin UI
+## Optional: Admin UI (Cloudflare Access)
 
-To use the admin UI at `/_admin/` for device management, you need to:
-1. Enable Cloudflare Access on your worker
-2. Set the Access secrets so the worker can validate JWTs
+The admin UI at `/_admin/` provides device management, R2 backup controls, and gateway restart. It requires [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/) for authentication.
 
-### 1. Enable Cloudflare Access on workers.dev
+> **Note:** Cloudflare Access is optional. The Control UI, aX Platform webhooks, and all chat channels work without it. Only set this up if you need the admin UI for device pairing management.
+>
+> **Important:** If you use aX Platform, do **not** enable Cloudflare Access on the entire domain — it will block webhook delivery to `/ax/dispatch`. Instead, use the [manual Access application](#manual-access-application) approach to protect only `/_admin/*` and `/api/*` paths.
 
-The easiest way to protect your worker is using the built-in Cloudflare Access integration for workers.dev:
+### Quick Setup
 
 1. Go to the [Workers & Pages dashboard](https://dash.cloudflare.com/?to=/:account/workers-and-pages)
-2. Select your Worker (e.g., `moltbot-sandbox`)
-3. In **Settings**, under **Domains & Routes**, in the `workers.dev` row, click the meatballs menu (`...`)
+2. Select your Worker
+3. In **Settings**, under **Domains & Routes**, in the `workers.dev` row, click `...`
 4. Click **Enable Cloudflare Access**
-5. Click **Manage Cloudflare Access** to configure who can access:
-   - Add your email address to the allow list
-   - Or configure other identity providers (Google, GitHub, etc.)
-6. Copy the **Application Audience (AUD)** tag from the Access application settings. This will be your `CF_ACCESS_AUD` in Step 2 below
+5. Add your email to the allow list
+6. Copy the **Application Audience (AUD)** tag
 
-### 2. Set Access Secrets
-
-After enabling Cloudflare Access, set the secrets so the worker can validate JWTs:
+Then set the secrets:
 
 ```bash
-# Your Cloudflare Access team domain (e.g., "myteam.cloudflareaccess.com")
 npx wrangler secret put CF_ACCESS_TEAM_DOMAIN
+# Enter your team domain (e.g., "myteam.cloudflareaccess.com")
 
-# The Application Audience (AUD) tag from your Access application that you copied in the step above
 npx wrangler secret put CF_ACCESS_AUD
+# Enter the AUD tag you copied
 ```
 
-You can find your team domain in the [Zero Trust Dashboard](https://one.dash.cloudflare.com/) under **Settings** > **Custom Pages** (it's the subdomain before `.cloudflareaccess.com`).
+### Manual Access Application
 
-### 3. Redeploy
-
-```bash
-npm run deploy
-```
-
-Now visit `/_admin/` and you'll be prompted to authenticate via Cloudflare Access before accessing the admin UI.
-
-### Alternative: Manual Access Application
-
-If you prefer more control, you can manually create an Access application:
+If you use aX Platform or want more control, create an Access application scoped to specific paths:
 
 1. Go to [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/)
 2. Navigate to **Access** > **Applications**
 3. Create a new **Self-hosted** application
-4. Set the application domain to your Worker URL (e.g., `moltbot-sandbox.your-subdomain.workers.dev`)
+4. Set the application domain to your Worker URL
 5. Add paths to protect: `/_admin/*`, `/api/*`, `/debug/*`
 6. Configure your desired identity providers (e.g., email OTP, Google, GitHub)
 7. Copy the **Application Audience (AUD)** tag and set the secrets as shown above
+
+This approach protects admin routes while leaving `/ax/dispatch` and the Control UI accessible.
 
 ### Local Development
 
@@ -270,11 +254,11 @@ Access the admin UI at `/_admin/` to:
 - **Restart Gateway** - Kill and restart the moltbot gateway process
 - **Device Pairing** - View pending requests, approve devices individually or all at once, view paired devices
 
-The admin UI requires Cloudflare Access authentication (or `DEV_MODE=true` for local development).
+The admin UI requires [Cloudflare Access](#optional-admin-ui-cloudflare-access) authentication (or `DEV_MODE=true` for local development).
 
 ## Debug Endpoints
 
-Debug endpoints are available at `/debug/*` when enabled (requires `DEBUG_ROUTES=true` and Cloudflare Access):
+Debug endpoints are available at `/debug/*` when enabled (requires `DEBUG_ROUTES=true` and [Cloudflare Access](#optional-admin-ui-cloudflare-access)):
 
 - `GET /debug/processes` - List all container processes
 - `GET /debug/logs?id=<process_id>` - Get logs for a specific process
@@ -403,8 +387,8 @@ The `AI_GATEWAY_*` variables take precedence over `ANTHROPIC_*` if both are set.
 | `ANTHROPIC_API_KEY` | Yes* | Direct Anthropic API key (fallback if AI Gateway not configured) |
 | `ANTHROPIC_BASE_URL` | No | Direct Anthropic API base URL (fallback) |
 | `OPENAI_API_KEY` | No | OpenAI API key (alternative provider) |
-| `CF_ACCESS_TEAM_DOMAIN` | Yes* | Cloudflare Access team domain (required for admin UI) |
-| `CF_ACCESS_AUD` | Yes* | Cloudflare Access application audience (required for admin UI) |
+| `CF_ACCESS_TEAM_DOMAIN` | No | Cloudflare Access team domain (only needed for admin UI) |
+| `CF_ACCESS_AUD` | No | Cloudflare Access application audience (only needed for admin UI) |
 | `MOLTBOT_GATEWAY_TOKEN` | Yes | Gateway token for authentication (pass via `?token=` query param) |
 | `DEV_MODE` | No | Set to `true` to skip CF Access auth + device pairing (local dev only) |
 | `DEBUG_ROUTES` | No | Set to `true` to enable `/debug/*` routes |
@@ -429,11 +413,15 @@ The `AI_GATEWAY_*` variables take precedence over `ANTHROPIC_*` if both are set.
 
 OpenClaw in Cloudflare Sandbox uses multiple authentication layers:
 
-1. **Cloudflare Access** - Protects admin routes (`/_admin/`, `/api/*`, `/debug/*`). Only authenticated users can manage devices.
+1. **Gateway Token** (required) — Protects the Control UI. All requests to the moltbot gateway require a valid `?token=` query parameter. Without this token, the gateway rejects the request. Keep this secret.
 
-2. **Gateway Token** - Required to access the Control UI. Pass via `?token=` query parameter. Keep this secret.
+2. **Device Pairing** — Each device (browser, CLI, chat platform DM) must be explicitly approved before it can interact with the assistant. This is the default "pairing" DM policy.
 
-3. **Device Pairing** - Each device (browser, CLI, chat platform DM) must be explicitly approved via the admin UI before it can interact with the assistant. This is the default "pairing" DM policy.
+3. **HMAC Webhook Verification** — aX Platform webhooks to `/ax/dispatch` are verified using HMAC signatures. The webhook secret in `AX_AGENTS` is used to validate that requests originate from the aX Platform backend.
+
+4. **CDP Secret** — Browser automation endpoints at `/cdp/*` require a shared secret for authentication.
+
+5. **Cloudflare Access** (optional) — Protects admin routes (`/_admin/`, `/api/*`, `/debug/*`). Only needed if you want the admin UI for device management. See [Admin UI setup](#optional-admin-ui-cloudflare-access).
 
 ## Troubleshooting
 
@@ -447,7 +435,9 @@ OpenClaw in Cloudflare Sandbox uses multiple authentication layers:
 
 **R2 not mounting:** Check that all three R2 secrets are set (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `CF_ACCOUNT_ID`). Note: R2 mounting only works in production, not with `wrangler dev`.
 
-**Access denied on admin routes:** Ensure `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are set, and that your Cloudflare Access application is configured correctly.
+**Access denied on admin routes:** Ensure `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are set, and that your Cloudflare Access application is configured correctly. See [Admin UI setup](#optional-admin-ui-cloudflare-access).
+
+**aX Platform webhooks failing:** If your agent isn't responding to @mentions, check that Cloudflare Access is not enabled on the entire domain. It must be scoped to `/_admin/*` and `/api/*` paths only, or disabled entirely. The `/ax/dispatch` endpoint must be publicly reachable (it uses HMAC signature verification for security).
 
 **Devices not appearing in admin UI:** Device list commands take 10-15 seconds due to WebSocket connection overhead. Wait and refresh.
 
