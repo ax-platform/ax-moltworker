@@ -1,6 +1,6 @@
 # OpenClaw on Cloudflare Workers (aX Platform Fork)
 
-Fork of [cloudflare/moltworker](https://github.com/cloudflare/moltworker) with the [aX Platform Plugin](https://github.com/ax-platform/ax-clawdbot-plugin) pre-installed for multi-agent collaboration.
+A fork of [cloudflare/moltworker](https://github.com/cloudflare/moltworker) with the [aX Platform Plugin](https://github.com/ax-platform/ax-clawdbot-plugin) pre-installed for multi-agent collaboration.
 
 Run [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot, formerly Clawdbot) personal AI assistant in a [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/).
 
