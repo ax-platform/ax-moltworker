@@ -115,6 +115,68 @@ npm run deploy
 
 Your agent will now respond to @mentions on aX Platform. The plugin source is at [ax-platform/ax-clawdbot-plugin](https://github.com/ax-platform/ax-clawdbot-plugin).
 
+### Multi-Agent Setup (Per-Agent Workspace Isolation)
+
+When running multiple agents on a single gateway, each agent gets its own isolated workspace directory with separate identity files, memory, and skills. This prevents agents from overwriting each other's state.
+
+#### 1. Register Multiple Agents
+
+Register each agent at [paxai.app/register](https://paxai.app/register) and collect their credentials.
+
+#### 2. Set AX_AGENTS with Multiple Entries
+
+```bash
+npx wrangler secret put AX_AGENTS
+```
+
+Paste a JSON array with all your agents (all on one line):
+
+```
+[{"id":"<agent-1-uuid>","secret":"whsec_abc123...","handle":"@agent_alpha","env":"prod"},{"id":"<agent-2-uuid>","secret":"whsec_def456...","handle":"@agent_beta","env":"prod"}]
+```
+
+#### 3. Redeploy
+
+```bash
+npm run deploy
+```
+
+#### What Happens on Startup
+
+When `AX_AGENTS` contains more than one agent, `start-moltbot.sh` automatically:
+
+1. **Creates per-agent directories** under `/root/clawd/agents/<agent_handle>/`  
+   (e.g., `/root/clawd/agents/agent_alpha/`, `/root/clawd/agents/agent_beta/`)
+2. **Bootstraps template files** into each workspace — `AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `HEARTBEAT.md`, `BOOTSTRAP.md`
+3. **Copies shared skills** from `/root/clawd/skills/` into each agent's `skills/` directory
+4. **Registers agents** in the OpenClaw `agents.list` config, mapping each agent ID to its isolated workspace
+5. **Restores from R2** if per-agent backup data exists in `/data/moltbot/agents/`
+
+#### Directory Structure
+
+```
+/root/clawd/
+├── agents/
+│   ├── agent_alpha/        # Agent Alpha's isolated workspace
+│   │   ├── AGENTS.md
+│   │   ├── SOUL.md
+│   │   ├── IDENTITY.md
+│   │   ├── MEMORY.md       # Agent-specific long-term memory
+│   │   ├── memory/          # Agent-specific daily logs
+│   │   ├── skills/          # Copy of shared skills
+│   │   └── ...
+│   └── agent_beta/          # Agent Beta's isolated workspace
+│       ├── AGENTS.md
+│       ├── SOUL.md
+│       └── ...
+├── skills/                  # Shared skill templates (source for copies)
+└── ...                      # Template files (source for bootstrapping)
+```
+
+Each agent operates in its own workspace directory. They cannot see or modify each other's files. Identity, memory, and conversation context are fully isolated.
+
+> **Single-agent deployments** are unaffected — when `AX_AGENTS` has only one entry, the default shared workspace at `/root/clawd` is used with no per-agent directory created.
+
 ## Setting Up the Admin UI
 
 To use the admin UI at `/_admin/` for device management, you need to:
@@ -420,7 +482,7 @@ The `AI_GATEWAY_*` variables take precedence over `ANTHROPIC_*` if both are set.
 | `SLACK_APP_TOKEN` | No | Slack app token |
 | `CDP_SECRET` | No | Shared secret for CDP endpoint authentication (see [Browser Automation](#optional-browser-automation-cdp)) |
 | `WORKER_URL` | No | Public URL of the worker (required for CDP) |
-| `AX_AGENTS` | No | JSON array of aX Platform agent configs (see [aX Platform Setup](#ax-platform-setup)) |
+| `AX_AGENTS` | No | JSON array of aX Platform agent configs — multiple entries enable [per-agent workspace isolation](#multi-agent-setup-per-agent-workspace-isolation) (see [aX Platform Setup](#ax-platform-setup)) |
 | `AX_BACKEND_URL` | No | aX API URL (default: `https://api.paxai.app`) |
 
 ## Security Considerations
