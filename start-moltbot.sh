@@ -347,9 +347,7 @@ if (process.env.AX_AGENTS) {
                         for (const entry of skillEntries) {
                             const destEntry = path.join(destSkills, entry.name);
                             if (!fs.existsSync(destEntry)) {
-                                // Recursively copy skill directory
-                                const cpSync = require('child_process').execSync;
-                                cpSync('cp -r ' + JSON.stringify(path.join(srcSkills, entry.name)) + ' ' + JSON.stringify(destEntry));
+                                fs.cpSync(path.join(srcSkills, entry.name), destEntry, { recursive: true });
                                 console.log('  Copied skill', entry.name, 'to', agentDir);
                             }
                         }
