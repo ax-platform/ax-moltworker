@@ -105,6 +105,17 @@ if [ -d "$BACKUP_DIR/skills" ] && [ "$(ls -A $BACKUP_DIR/skills 2>/dev/null)" ];
     fi
 fi
 
+# Restore per-agent workspace directories from R2 backup if available
+AGENTS_DIR="/root/clawd/agents"
+if [ -d "$BACKUP_DIR/agents" ] && [ "$(ls -A $BACKUP_DIR/agents 2>/dev/null)" ]; then
+    if should_restore_from_r2; then
+        echo "Restoring per-agent workspaces from $BACKUP_DIR/agents..."
+        mkdir -p "$AGENTS_DIR"
+        cp -a "$BACKUP_DIR/agents/." "$AGENTS_DIR/"
+        echo "Restored per-agent workspaces from R2 backup"
+    fi
+fi
+
 # If config file still doesn't exist, create from template
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "No existing config found, initializing from template..."
@@ -296,6 +307,68 @@ if (process.env.AX_AGENTS) {
             };
             console.log('aX Platform configured with', axAgents.length, 'agent(s):');
             axAgents.forEach(a => console.log('  -', a.handle || a.id.substring(0, 8)));
+
+            // Per-agent workspace isolation
+            // When multiple agents share a gateway, each gets its own workspace directory
+            // to prevent identity/memory collisions. Single-agent setups keep /root/clawd.
+            if (axAgents.length > 1) {
+                const path = require('path');
+                const baseDir = '/root/clawd/agents';
+                const templateDir = '/root/clawd';
+                const templateFiles = ['AGENTS.md', 'SOUL.md', 'BOOTSTRAP.md', 'HEARTBEAT.md',
+                                       'IDENTITY.md', 'USER.md', 'TOOLS.md'];
+
+                config.agents.list = config.agents.list || [];
+
+                for (const agent of axAgents) {
+                    // Derive agent directory name from handle (strip @, lowercase)
+                    const dirName = (agent.handle || agent.id).replace(/^@/, '').toLowerCase();
+                    const agentDir = path.join(baseDir, dirName);
+
+                    // Create workspace directory
+                    fs.mkdirSync(agentDir, { recursive: true });
+                    fs.mkdirSync(path.join(agentDir, 'skills'), { recursive: true });
+
+                    // Copy template files into new workspace if they don't already exist
+                    for (const tmpl of templateFiles) {
+                        const src = path.join(templateDir, tmpl);
+                        const dest = path.join(agentDir, tmpl);
+                        if (fs.existsSync(src) && !fs.existsSync(dest)) {
+                            fs.copyFileSync(src, dest);
+                            console.log('  Copied template', tmpl, 'to', agentDir);
+                        }
+                    }
+
+                    // Copy skills if not already present
+                    const srcSkills = path.join(templateDir, 'skills');
+                    const destSkills = path.join(agentDir, 'skills');
+                    if (fs.existsSync(srcSkills)) {
+                        const skillEntries = fs.readdirSync(srcSkills, { withFileTypes: true });
+                        for (const entry of skillEntries) {
+                            const destEntry = path.join(destSkills, entry.name);
+                            if (!fs.existsSync(destEntry)) {
+                                // Recursively copy skill directory
+                                const cpSync = require('child_process').execSync;
+                                cpSync('cp -r ' + JSON.stringify(path.join(srcSkills, entry.name)) + ' ' + JSON.stringify(destEntry));
+                                console.log('  Copied skill', entry.name, 'to', agentDir);
+                            }
+                        }
+                    }
+
+                    // Add to agents.list with isolated workspace
+                    // Only add if not already present (idempotent)
+                    const existing = config.agents.list.find(a => a.id === dirName);
+                    if (!existing) {
+                        config.agents.list.push({
+                            id: dirName,
+                            workspace: agentDir
+                        });
+                        console.log('  Agent workspace:', dirName, '->', agentDir);
+                    }
+                }
+
+                console.log('Per-agent workspace isolation enabled for', axAgents.length, 'agents');
+            }
         }
     } catch (e) {
         console.error('Failed to parse AX_AGENTS:', e.message);
